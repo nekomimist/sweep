@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 )
+
 var version = "0.1.0"
 var dryRun bool = false
 
@@ -17,7 +18,7 @@ func sweep(path string, info os.FileInfo, err error) error {
 		return nil
 	}
 	if info.Mode().IsRegular() { // 通常ファイル以外は対象外
-		if !dryRun &&  strings.HasSuffix(path, "~") {
+		if !dryRun && strings.HasSuffix(path, "~") {
 			fmt.Println(path)
 			err := os.Remove(path)
 			if err != nil {
@@ -32,11 +33,13 @@ func main() {
 	var showVersion bool
 	dir := "."
 	flag.BoolVar(&dryRun, "n", false, "print filename but not delete")
-	flag.BoolVer(&showVersion,"v", false, "show version")
+	flag.BoolVar(&dryRun, "dry-run", false, "print filename but not delete")
+	flag.BoolVar(&showVersion, "v", false, "show version")
+	flag.BoolVar(&showVersion, "version", false, "show version")
 	flag.Parse()
 
 	if showVersion {
-		fmt.println("version:", version)
+		fmt.Println("version:", version)
 		return
 	}
 	if flag.NArg() > 1 {
