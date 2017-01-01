@@ -22,43 +22,46 @@ func (d verboseT) Printf(format string, args ...interface{}) {
 	}
 }
 
-// file scopeにするしかないのかなこいつら
-var dryRun bool = false
-var excludeExist bool = false
-var excludeRegexp = regexp.MustCompile("")
-
 // 通常ファイルかつ末尾が~なら削除を試みるWalkFunc
-func sweep(path string, info os.FileInfo, err error) error {
-	// errつきで呼ばれた際の処理
-	if err != nil {
-		fmt.Printf("Error: skip %s\n", path)
-		if info.IsDir() {
-			return filepath.SkipDir
-		} else {
-			return nil
+func sweepFunc(dryRun bool, regexp *regexp.Regexp) filepath.WalkFunc {
+	return func(path string, info os.FileInfo, err error) error {
+		// errつきで呼ばれた際の処理
+		if err != nil {
+			fmt.Printf("Error: skip %s\n", path)
+			if info.IsDir() {
+				return filepath.SkipDir
+			} else {
+				return nil
+			}
 		}
-	}
-
-	// 以下正常時
-	path, _ = filepath.Abs(path) // ファイル名しか来ない以上Absは必ず成功
-	excludeMatched := false
-	if excludeExist {
-		excludeMatched = excludeRegexp.MatchString(path)
-	}
-	if !excludeMatched && info.Mode().IsRegular() {
-		vlog.Printf("Check1: %s\n", path)
-		if strings.HasSuffix(path, "~") {
-			vlog.Printf("Check2: %s\n", path)
-			if !dryRun {
-				if os.Remove(path) != nil {
-					fmt.Printf("Error: cannot remove %s\n", path)
-				} else {
-					vlog.Printf("Removed: %s\n", path)
+		// 以下正常時
+		path, _ = filepath.Abs(path)
+		// Go1.8だとWindowsのDirectory JunctionもWalkしてしまう
+		if info.IsDir() && info.Mode()&os.ModeSymlink == os.ModeSymlink {
+			vlog.Printf("Skip : Directory Junction %s\n", path)
+			return filepath.SkipDir
+		}
+		// 除外に一致するDirectoryはskipする
+		excludeMatched := regexp.MatchString(path)
+		if excludeMatched && info.IsDir() {
+			return filepath.SkipDir
+		}
+		// 除外に一致しない通常ファイルは処理する
+		if !excludeMatched && info.Mode().IsRegular() {
+			vlog.Printf("Check1: %s\n", path)
+			if strings.HasSuffix(path, "~") {
+				vlog.Printf("Check2: %s\n", path)
+				if !dryRun {
+					if os.Remove(path) != nil {
+						fmt.Printf("Error: cannot remove %s\n", path)
+					} else {
+						vlog.Printf("Removed: %s\n", path)
+					}
 				}
 			}
 		}
+		return nil
 	}
-	return nil
 }
 
 func main() {
@@ -66,7 +69,8 @@ func main() {
 	var excludePattern string
 	var verbose bool
 	var dir string = "."
-	
+	var dryRun bool
+
 	flag.BoolVar(&dryRun, "n", false, "print filename but not delete")
 	flag.BoolVar(&dryRun, "dryrun", false, "print filename but not delete")
 	flag.BoolVar(&showVersion, "v", false, "show version")
@@ -78,32 +82,28 @@ func main() {
 
 	vlog = verboseT(verbose) // もうちょっとよい手はないか?
 
-	if excludePattern == "\x00" {
-		excludePattern = ".*[\\/].elmo[\\/].*"
+	if excludePattern == "\x00" { // 定義ファイルから読みたいところ
+		excludePattern = `[\\/]\.elmo[\\/]`
 	}
-	if excludePattern != "" {
-		var err error
-		excludeRegexp, err = regexp.Compile(excludePattern)
-		if err != nil {
-			fmt.Println("Illegal regexp.")
-			os.Exit(1)
-		}
-		excludeExist = true
+	excludeRegexp, err := regexp.Compile(excludePattern)
+	if err != nil {
+		fmt.Println("Illegal regexp.")
+		os.Exit(1)
 	}
 	if showVersion {
 		fmt.Println("Directory Sweeper ver", version)
 		os.Exit(0)
 	}
-
 	if flag.NArg() >= 1 {
 		dir = flag.Arg(0)
 	}
 	vlog.Printf("Exclude Pattern: %s\n", excludePattern)
 	vlog.Printf("Target Directory: %s\n", dir)
-	err := filepath.Walk(dir, sweep)
-	if err != nil {
+	if filepath.Walk(dir, sweepFunc(dryRun, excludeRegexp)) != nil {
+		vlog.Printf("Failed.\n")
 		os.Exit(1)
 	} else {
+		vlog.Printf("Succeeded.\n")
 		os.Exit(0)
 	}
 }
