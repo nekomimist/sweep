@@ -9,11 +9,21 @@ import (
 	"strings"
 )
 
-var version = "0.2.0"
+var version = "0.2.1"
+
+// vlogがtrueなら出力するPrintf
+type verboseT bool
+
+var vlog verboseT = false
+
+func (d verboseT) Printf(format string, args ...interface{}) {
+	if d {
+		fmt.Printf(format, args...)
+	}
+}
 
 // file scopeにするしかないのかなこいつら
 var dryRun bool = false
-var verbose bool = false
 var excludeExist bool = false
 var excludeRegexp = regexp.MustCompile("")
 
@@ -36,19 +46,14 @@ func sweep(path string, info os.FileInfo, err error) error {
 		excludeMatched = excludeRegexp.MatchString(path)
 	}
 	if !excludeMatched && info.Mode().IsRegular() {
-		if verbose {
-			fmt.Printf("Check1: %s\n", path)
-		}
+		vlog.Printf("Check1: %s\n", path)
 		if strings.HasSuffix(path, "~") {
-			if verbose {
-				fmt.Printf("Check2: %s\n", path)
-			}
+			vlog.Printf("Check2: %s\n", path)
 			if !dryRun {
-				err := os.Remove(path)
-				if err != nil {
+				if os.Remove(path) != nil {
 					fmt.Printf("Error: cannot remove %s\n", path)
-				} else if verbose {
-					fmt.Printf("Removed: %s\n", path)
+				} else {
+					vlog.Printf("Removed: %s\n", path)
 				}
 			}
 		}
@@ -58,22 +63,29 @@ func sweep(path string, info os.FileInfo, err error) error {
 
 func main() {
 	var showVersion bool
-	var excludePattern string = ""
-
-	dir := "."
+	var excludePattern string
+	var verbose bool
+	var dir string = "."
+	
 	flag.BoolVar(&dryRun, "n", false, "print filename but not delete")
 	flag.BoolVar(&dryRun, "dryrun", false, "print filename but not delete")
 	flag.BoolVar(&showVersion, "v", false, "show version")
 	flag.BoolVar(&showVersion, "version", false, "show version")
+	flag.StringVar(&excludePattern, "x", "\x00", "exclude path string")
+	flag.StringVar(&excludePattern, "exclude", "\x00", "exclude path string")
 	flag.BoolVar(&verbose, "verbose", false, "verbose")
-	flag.StringVar(&excludePattern, "x", "", "exclude path string")
-	flag.StringVar(&excludePattern, "exclude", "", "exclude path string")
 	flag.Parse()
 
+	vlog = verboseT(verbose) // もうちょっとよい手はないか?
+
+	if excludePattern == "\x00" {
+		excludePattern = ".*[\\/].elmo[\\/].*"
+	}
 	if excludePattern != "" {
 		var err error
 		excludeRegexp, err = regexp.Compile(excludePattern)
 		if err != nil {
+			fmt.Println("Illegal regexp.")
 			os.Exit(1)
 		}
 		excludeExist = true
@@ -82,13 +94,12 @@ func main() {
 		fmt.Println("Directory Sweeper ver", version)
 		os.Exit(0)
 	}
-	if flag.NArg() > 1 {
-		dir = flag.Arg(1)
+
+	if flag.NArg() >= 1 {
+		dir = flag.Arg(0)
 	}
-	if verbose {
-		fmt.Println("Exclude Pattern: ", excludePattern)
-		fmt.Println("Target Directory: ", dir)
-	}
+	vlog.Printf("Exclude Pattern: %s\n", excludePattern)
+	vlog.Printf("Target Directory: %s\n", dir)
 	err := filepath.Walk(dir, sweep)
 	if err != nil {
 		os.Exit(1)
