@@ -24,6 +24,7 @@ func (d verboseT) Printf(format string, args ...interface{}) {
 
 // 通常ファイルかつ末尾が~なら削除を試みるWalkFunc
 func sweepFunc(dryRun bool, regexp *regexp.Regexp) filepath.WalkFunc {
+	// WalkFunc用の引数を外から貰うためにこの形
 	return func(path string, info os.FileInfo, err error) error {
 		// errつきで呼ばれた際の処理
 		if err != nil {
@@ -36,7 +37,7 @@ func sweepFunc(dryRun bool, regexp *regexp.Regexp) filepath.WalkFunc {
 		}
 		// 以下正常時
 		path, _ = filepath.Abs(path)
-		// Go1.8だとWindowsのDirectory JunctionもWalkしてしまう
+		// Go1.8まではWindowsのDirectory JunctionもWalkしてしまう
 		if info.IsDir() && info.Mode()&os.ModeSymlink == os.ModeSymlink {
 			vlog.Printf("Skip : Directory Junction %s\n", path)
 			return filepath.SkipDir
@@ -67,7 +68,6 @@ func sweepFunc(dryRun bool, regexp *regexp.Regexp) filepath.WalkFunc {
 func main() {
 	var showVersion bool
 	var excludePattern string
-	var verbose bool
 	var dir string = "."
 	var dryRun bool
 
@@ -77,10 +77,8 @@ func main() {
 	flag.BoolVar(&showVersion, "version", false, "show version")
 	flag.StringVar(&excludePattern, "x", "\x00", "exclude path string")
 	flag.StringVar(&excludePattern, "exclude", "\x00", "exclude path string")
-	flag.BoolVar(&verbose, "verbose", false, "verbose")
+	flag.BoolVar((* bool)(&vlog), "verbose", false, "verbose")
 	flag.Parse()
-
-	vlog = verboseT(verbose) // もうちょっとよい手はないか?
 
 	if excludePattern == "\x00" { // 定義ファイルから読みたいところ
 		excludePattern = `[\\/]\.elmo[\\/]`
