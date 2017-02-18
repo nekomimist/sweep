@@ -1,3 +1,6 @@
+// Copyright 2017 Hiroyuki Ishikura. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
 package main
 
 import (
@@ -9,7 +12,7 @@ import (
 	"strings"
 )
 
-var version = "0.2.1"
+const version = "0.2.1"
 
 // vlogがtrueなら出力するPrintf
 type verboseT bool
@@ -75,9 +78,9 @@ func main() {
 	flag.BoolVar(&dryRun, "dryrun", false, "print filename but not delete")
 	flag.BoolVar(&showVersion, "v", false, "show version")
 	flag.BoolVar(&showVersion, "version", false, "show version")
-	flag.StringVar(&excludePattern, "x", "\x00", "exclude path string")
-	flag.StringVar(&excludePattern, "exclude", "\x00", "exclude path string")
-	flag.BoolVar((* bool)(&vlog), "verbose", false, "verbose")
+	flag.StringVar(&excludePattern, "x", "\x00", "exclude path regexp")
+	flag.StringVar(&excludePattern, "exclude", "\x00", "exclude path regexp")
+	flag.BoolVar((*bool)(&vlog), "verbose", false, "verbose")
 	flag.Parse()
 
 	if excludePattern == "\x00" { // 定義ファイルから読みたいところ
