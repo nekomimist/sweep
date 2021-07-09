@@ -1,4 +1,4 @@
-// Copyright 2017 Hiroyuki Ishikura. All rights reserved.
+// Copyright 2017,2021 Hiroyuki Ishikura. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 package main
@@ -6,13 +6,14 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 )
 
-const version = "0.2.1"
+const version = "0.2.2"
 
 // vlogがtrueなら出力するPrintf
 type verboseT bool
@@ -26,9 +27,9 @@ func (d verboseT) Printf(format string, args ...interface{}) {
 }
 
 // 通常ファイルかつ末尾が~なら削除を試みるWalkFunc
-func sweepFunc(dryRun bool, regexp *regexp.Regexp) filepath.WalkFunc {
+func sweepFunc(dryRun bool, regexp *regexp.Regexp) fs.WalkDirFunc {
 	// WalkFunc用の引数を外から貰うためにこの形
-	return func(path string, info os.FileInfo, err error) error {
+	return func(path string, info fs.DirEntry, err error) error {
 		// errつきで呼ばれた際の処理
 		if err != nil {
 			fmt.Printf("Error: skip %s\n", path)
@@ -40,18 +41,13 @@ func sweepFunc(dryRun bool, regexp *regexp.Regexp) filepath.WalkFunc {
 		}
 		// 以下正常時
 		path, _ = filepath.Abs(path)
-		// Go1.8まではWindowsのDirectory JunctionもWalkしてしまう
-		if info.IsDir() && info.Mode()&os.ModeSymlink == os.ModeSymlink {
-			vlog.Printf("Skip : Directory Junction %s\n", path)
-			return filepath.SkipDir
-		}
 		// 除外に一致するDirectoryはskipする
 		excludeMatched := regexp.MatchString(path)
 		if excludeMatched && info.IsDir() {
 			return filepath.SkipDir
 		}
 		// 除外に一致しない通常ファイルは処理する
-		if !excludeMatched && info.Mode().IsRegular() {
+		if !excludeMatched && info.Type().IsRegular() {
 			vlog.Printf("Check1: %s\n", path)
 			if strings.HasSuffix(path, "~") {
 				vlog.Printf("Check2: %s\n", path)
@@ -59,7 +55,7 @@ func sweepFunc(dryRun bool, regexp *regexp.Regexp) filepath.WalkFunc {
 					if os.Remove(path) != nil {
 						fmt.Printf("Error: cannot remove %s\n", path)
 					} else {
-						vlog.Printf("Removed: %s\n", path)
+						fmt.Printf("Removed: %s\n", path)
 					}
 				}
 			}
@@ -100,7 +96,7 @@ func main() {
 	}
 	vlog.Printf("Exclude Pattern: %s\n", excludePattern)
 	vlog.Printf("Target Directory: %s\n", dir)
-	if filepath.Walk(dir, sweepFunc(dryRun, excludeRegexp)) != nil {
+	if filepath.WalkDir(dir, sweepFunc(dryRun, excludeRegexp)) != nil {
 		vlog.Printf("Failed.\n")
 		os.Exit(1)
 	} else {
