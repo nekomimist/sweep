@@ -5,7 +5,6 @@ package main
 
 import (
 	"bufio"
-	"flag"
 	"fmt"
 	"io/fs"
 	"os"
@@ -13,6 +12,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/spf13/pflag"
 )
 
 const version = "0.2.2"
@@ -64,17 +65,25 @@ func NewConfig() *Config {
 
 // ParseFlags parses command line flags into Config
 func (c *Config) ParseFlags() error {
-	flag.BoolVar(&c.DryRun, "n", false, "print filename but not delete")
-	flag.BoolVar(&c.DryRun, "dryrun", false, "print filename but not delete")
-	flag.BoolVar(&c.ShowVersion, "v", false, "show version")
-	flag.BoolVar(&c.ShowVersion, "version", false, "show version")
-	flag.StringVar(&c.ExcludePattern, "x", "\x00", "exclude path regexp")
-	flag.StringVar(&c.ExcludePattern, "exclude", "\x00", "exclude path regexp")
-	flag.BoolVar(&c.Verbose, "verbose", false, "verbose")
-	flag.BoolVar(&c.Interactive, "interactive", false, "ask before deleting each file")
-	flag.BoolVar(&c.Confirm, "confirm", false, "ask before starting deletion")
-	flag.IntVar(&c.MinAgeDays, "age", 0, "minimum age in days before deletion (0 = delete immediately)")
-	flag.Parse()
+	// Define flags with both short and long options
+	pflag.BoolVarP(&c.DryRun, "dry-run", "n", false, "print filename but not delete")
+	pflag.BoolVarP(&c.ShowVersion, "version", "v", false, "show version")
+	pflag.StringVarP(&c.ExcludePattern, "exclude", "x", "\x00", "exclude path regexp")
+	pflag.BoolVarP(&c.Verbose, "verbose", "V", false, "verbose output")
+	pflag.BoolVarP(&c.Interactive, "interactive", "i", false, "ask before deleting each file")
+	pflag.BoolVarP(&c.Confirm, "confirm", "c", false, "ask before starting deletion")
+	pflag.IntVarP(&c.MinAgeDays, "age", "a", 0, "minimum age in days before deletion (0 = delete immediately)")
+
+	// Add help flag automatically
+	pflag.BoolP("help", "h", false, "show this help message")
+
+	pflag.Parse()
+
+	// Handle help flag
+	if help, _ := pflag.CommandLine.GetBool("help"); help {
+		pflag.Usage()
+		os.Exit(0)
+	}
 
 	// Set default exclude pattern if not provided
 	if c.ExcludePattern == "\x00" {
@@ -92,8 +101,8 @@ func (c *Config) ParseFlags() error {
 	c.MinAge = time.Duration(c.MinAgeDays) * 24 * time.Hour
 
 	// Set directory from args
-	if flag.NArg() >= 1 {
-		c.Directory = flag.Arg(0)
+	if pflag.NArg() >= 1 {
+		c.Directory = pflag.Arg(0)
 	}
 
 	return nil
