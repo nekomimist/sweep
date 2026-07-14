@@ -23,6 +23,9 @@ func TestParseConfigDefaults(t *testing.T) {
 	if config.MinAge != 0 {
 		t.Fatalf("MinAge = %s, want 0", config.MinAge)
 	}
+	if config.KeepEmacsBackups != 0 {
+		t.Fatalf("KeepEmacsBackups = %d, want 0", config.KeepEmacsBackups)
+	}
 }
 
 func TestParseConfigFlags(t *testing.T) {
@@ -34,6 +37,7 @@ func TestParseConfigFlags(t *testing.T) {
 		"--confirm",
 		"--exclude", `\.git`,
 		"--age", "7",
+		"--keep-emacs-backups", "2",
 		"/tmp/work",
 	}, &errOut)
 	if err != nil {
@@ -49,6 +53,9 @@ func TestParseConfigFlags(t *testing.T) {
 	if config.MinAge != 7*24*time.Hour {
 		t.Fatalf("MinAge = %s, want 168h", config.MinAge)
 	}
+	if config.KeepEmacsBackups != 2 {
+		t.Fatalf("KeepEmacsBackups = %d, want 2", config.KeepEmacsBackups)
+	}
 	if !config.ExcludeRegexp.MatchString("/tmp/.git/config") {
 		t.Fatal("ExcludeRegexp did not match expected path")
 	}
@@ -59,6 +66,14 @@ func TestParseConfigRejectsNegativeAge(t *testing.T) {
 	_, err := ParseConfig([]string{"--age", "-1"}, &errOut)
 	if err == nil || !strings.Contains(err.Error(), "--age") {
 		t.Fatalf("ParseConfig() error = %v, want age error", err)
+	}
+}
+
+func TestParseConfigRejectsNegativeKeepEmacsBackups(t *testing.T) {
+	var errOut bytes.Buffer
+	_, err := ParseConfig([]string{"--keep-emacs-backups", "-1"}, &errOut)
+	if err == nil || !strings.Contains(err.Error(), "--keep-emacs-backups") {
+		t.Fatalf("ParseConfig() error = %v, want keep-emacs-backups error", err)
 	}
 }
 

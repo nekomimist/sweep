@@ -20,17 +20,18 @@ const Version = "0.2.2"
 
 // Config holds all configuration options for the sweep command.
 type Config struct {
-	DryRun         bool
-	Verbose        bool
-	Interactive    bool
-	Confirm        bool
-	ShowVersion    bool
-	ShowHelp       bool
-	ExcludePattern string
-	Directory      string
-	MinAgeDays     int
-	MinAge         time.Duration
-	ExcludeRegexp  *regexp.Regexp
+	DryRun           bool
+	Verbose          bool
+	Interactive      bool
+	Confirm          bool
+	ShowVersion      bool
+	ShowHelp         bool
+	ExcludePattern   string
+	Directory        string
+	MinAgeDays       int
+	KeepEmacsBackups int
+	MinAge           time.Duration
+	ExcludeRegexp    *regexp.Regexp
 }
 
 // NewConfig creates a new Config with default values.
@@ -62,6 +63,9 @@ func ParseConfig(args []string, output io.Writer) (Config, error) {
 
 	if config.MinAgeDays < 0 {
 		return config, fmt.Errorf("--age must be greater than or equal to 0")
+	}
+	if config.KeepEmacsBackups < 0 {
+		return config, fmt.Errorf("--keep-emacs-backups must be greater than or equal to 0")
 	}
 	config.MinAge = time.Duration(config.MinAgeDays) * 24 * time.Hour
 
@@ -97,6 +101,7 @@ func newFlagSet(output io.Writer, config *Config) *pflag.FlagSet {
 	flags.BoolVarP(&config.Interactive, "interactive", "i", false, "ask before deleting each file")
 	flags.BoolVarP(&config.Confirm, "confirm", "c", false, "ask before starting deletion")
 	flags.IntVarP(&config.MinAgeDays, "age", "a", 0, "minimum age in days before deletion (0 = delete immediately)")
+	flags.IntVar(&config.KeepEmacsBackups, "keep-emacs-backups", 0, "number of newest Emacs numbered backup generations to keep per original file (0 = disabled)")
 	flags.BoolP("help", "h", false, "show this help message")
 
 	return flags

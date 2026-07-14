@@ -171,6 +171,37 @@ func TestShouldDelete(t *testing.T) {
 	}
 }
 
+func TestEmacsNumberedBackup(t *testing.T) {
+	tests := []struct {
+		name           string
+		path           string
+		wantKey        string
+		wantGeneration int
+		wantOK         bool
+	}{
+		{name: "numbered", path: "/tmp/test.txt.~12~", wantKey: "/tmp/test.txt", wantGeneration: 12, wantOK: true},
+		{name: "leading zero", path: "/tmp/test.txt.~01~", wantKey: "/tmp/test.txt", wantGeneration: 1, wantOK: true},
+		{name: "zero", path: "/tmp/test.txt.~0~", wantKey: "/tmp/test.txt", wantGeneration: 0, wantOK: true},
+		{name: "simple tilde", path: "/tmp/test.txt~", wantOK: false},
+		{name: "non numeric", path: "/tmp/test.txt.~abc~", wantOK: false},
+		{name: "missing trailing tilde", path: "/tmp/test.txt.~1", wantOK: false},
+		{name: "bak", path: "/tmp/test.bak", wantOK: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotKey, gotGeneration, gotOK := emacsNumberedBackup(tt.path)
+			if gotOK != tt.wantOK {
+				t.Fatalf("emacsNumberedBackup(%q) ok = %v, want %v", tt.path, gotOK, tt.wantOK)
+			}
+			if gotKey != tt.wantKey || gotGeneration != tt.wantGeneration {
+				t.Fatalf("emacsNumberedBackup(%q) = (%q, %d), want (%q, %d)",
+					tt.path, gotKey, gotGeneration, tt.wantKey, tt.wantGeneration)
+			}
+		})
+	}
+}
+
 func TestCleanerWithAgeRestriction(t *testing.T) {
 	fileSystem := newMockFileSystem()
 	config := testConfig()
@@ -196,6 +227,68 @@ func TestCleanerWithAgeRestriction(t *testing.T) {
 	}
 	if result.SkippedNew != 2 {
 		t.Fatalf("SkippedNew = %d, want 2", result.SkippedNew)
+	}
+}
+
+func TestCleanerKeepsNewestEmacsNumberedBackups(t *testing.T) {
+	fileSystem := newMockFileSystem()
+	config := testConfig()
+	config.MinAgeDays = 7
+	config.MinAge = 7 * 24 * time.Hour
+	config.KeepEmacsBackups = 2
+
+	old := time.Now().Add(-10 * 24 * time.Hour)
+	fileSystem.addFile("/test/foo.txt.~1~", old)
+	fileSystem.addFile("/test/foo.txt.~2~", old)
+	fileSystem.addFile("/test/foo.txt.~3~", old)
+	fileSystem.addFile("/test/foo.txt.~4~", old)
+	fileSystem.addFile("/test/bar.txt.~1~", old)
+	fileSystem.addFile("/test/bar.txt.~2~", old)
+	fileSystem.addFile("/test/plain.txt~", old)
+	fileSystem.addFile("/test/plain.bak", old)
+	fileSystem.addFile("/test/not-numbered.~abc~", old)
+
+	var out bytes.Buffer
+	result := NewCleaner(fileSystem, config, strings.NewReader(""), &out, &out).Clean()
+
+	if err := result.Err(); err != nil {
+		t.Fatalf("Clean() error = %v", err)
+	}
+	want := []string{"/test/foo.txt.~1~", "/test/foo.txt.~2~", "/test/not-numbered.~abc~", "/test/plain.bak", "/test/plain.txt~"}
+	if !reflect.DeepEqual(fileSystem.removed, want) {
+		t.Fatalf("removed = %v, want %v", fileSystem.removed, want)
+	}
+	if result.SkippedKept != 4 {
+		t.Fatalf("SkippedKept = %d, want 4", result.SkippedKept)
+	}
+}
+
+func TestCleanerKeepsEmacsNumberedBackupsBeforeAgeCheck(t *testing.T) {
+	fileSystem := newMockFileSystem()
+	config := testConfig()
+	config.MinAgeDays = 7
+	config.MinAge = 7 * 24 * time.Hour
+	config.KeepEmacsBackups = 1
+
+	now := time.Now()
+	fileSystem.addFile("/test/foo.txt.~1~", now.Add(-10*24*time.Hour))
+	fileSystem.addFile("/test/foo.txt.~2~", now.Add(-3*24*time.Hour))
+
+	var out bytes.Buffer
+	result := NewCleaner(fileSystem, config, strings.NewReader(""), &out, &out).Clean()
+
+	if err := result.Err(); err != nil {
+		t.Fatalf("Clean() error = %v", err)
+	}
+	want := []string{"/test/foo.txt.~1~"}
+	if !reflect.DeepEqual(fileSystem.removed, want) {
+		t.Fatalf("removed = %v, want %v", fileSystem.removed, want)
+	}
+	if result.SkippedKept != 1 {
+		t.Fatalf("SkippedKept = %d, want 1", result.SkippedKept)
+	}
+	if result.SkippedNew != 0 {
+		t.Fatalf("SkippedNew = %d, want 0", result.SkippedNew)
 	}
 }
 
