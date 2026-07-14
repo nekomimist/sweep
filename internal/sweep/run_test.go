@@ -16,7 +16,7 @@ func TestRunVersion(t *testing.T) {
 	if code != ExitOK {
 		t.Fatalf("Run() code = %d, want %d", code, ExitOK)
 	}
-	if strings.TrimSpace(out.String()) != "Directory Sweeper ver 0.2.2" {
+	if strings.TrimSpace(out.String()) != "Directory Sweeper ver 0.3.0" {
 		t.Fatalf("stdout = %q", out.String())
 	}
 	if errOut.Len() != 0 {

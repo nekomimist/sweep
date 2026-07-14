@@ -16,7 +16,7 @@ const (
 )
 
 // Version is the user-visible program version.
-const Version = "0.2.2"
+const Version = "0.3.0"
 
 // Config holds all configuration options for the sweep command.
 type Config struct {
@@ -32,6 +32,14 @@ type Config struct {
 	KeepEmacsBackups int
 	MinAge           time.Duration
 	ExcludeRegexp    *regexp.Regexp
+
+	// profileName, configPath, and noConfig hold the raw --profile, --config,
+	// and --no-config flag values used to locate and select a config file
+	// profile. They are consumed by loadAndMergeConfig and are not part of
+	// the public configuration surface.
+	profileName string
+	configPath  string
+	noConfig    bool
 }
 
 // NewConfig creates a new Config with default values.
@@ -59,6 +67,22 @@ func ParseConfig(args []string, output io.Writer) (Config, error) {
 		flags.Usage()
 		config.ShowHelp = true
 		return config, nil
+	}
+
+	// --profile/--config/--no-config usage errors (e.g. contradictory flags,
+	// an empty --profile name) are pure CLI validation and apply regardless
+	// of --version.
+	if err := validateConfigFlags(&config, flags); err != nil {
+		return config, err
+	}
+
+	// --version must work even with a broken or unreadable config file
+	// (same UX as e.g. `git --version` with a broken .gitconfig), so only
+	// the filesystem-touching part of config loading is skipped here.
+	if !config.ShowVersion {
+		if err := loadAndMergeConfig(&config, flags); err != nil {
+			return config, err
+		}
 	}
 
 	if config.MinAgeDays < 0 {
@@ -102,6 +126,9 @@ func newFlagSet(output io.Writer, config *Config) *pflag.FlagSet {
 	flags.BoolVarP(&config.Confirm, "confirm", "c", false, "ask before starting deletion")
 	flags.IntVarP(&config.MinAgeDays, "age", "a", 0, "minimum age in days before deletion (0 = delete immediately)")
 	flags.IntVar(&config.KeepEmacsBackups, "keep-emacs-backups", 0, "number of newest Emacs numbered backup generations to keep per original file (0 = disabled)")
+	flags.StringVarP(&config.profileName, "profile", "p", "", "profile name to load from the config file (default \"default\")")
+	flags.StringVar(&config.configPath, "config", "", "path to the config file (default \"$XDG_CONFIG_HOME/sweep/config.toml\")")
+	flags.BoolVar(&config.noConfig, "no-config", false, "ignore config files entirely")
 	flags.BoolP("help", "h", false, "show this help message")
 
 	return flags
